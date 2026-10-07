@@ -6,9 +6,9 @@
 
 ## 安装与首次使用
 
-Windows 10/11 x64，选择 `XiaokeWidget-0.1.5-setup.exe` 安装版或 `XiaokeWidget-0.1.5-portable.exe` 便携版。安装版默认按当前用户安装，可选择目录；两者自带运行组件，不需要安装 Node、.NET 或 DSH。
+Windows 10/11 x64，选择 `XiaokeWidget-0.1.6-setup.exe` 安装版或 `XiaokeWidget-0.1.6-portable.exe` 便携版。安装版默认按当前用户安装，可选择目录；两者自带运行组件，不需要安装 Node、.NET 或 DSH。
 
-0.1.5 针对“关闭设置才可见、无法点击拖动、打开普通菜单消失”，改为可见期间稳定保持覆盖层级，并让设置位于宠物之上。普通菜单不再激活窗口，仅输入编辑允许键盘焦点；穿透区采用光标轮询，拖动使用指针捕获，不再混入无按键的转发移动。宿主前台与小克前台分别识别，空前台的短暂激活过渡不立即隐藏。保留之前的首次就绪、菜单位置恢复与错误弹窗修复。本版本按用户要求只编译打包，运行效果由用户自行验证。
+0.1.6 修复查询在隐藏后卡住、凭据和 New API 兼容、额度文字不可见与旧数据不更新、菜单越界、页面／辅助组件崩溃后永久消失，以及来源保存和错误反馈。保留原版角色与鼠标交互，对本项目模拟宿主执行单元和桌面回归；Claude 按要求禁止启动、连接和测试。
 
 升级前从托盘退出旧版小克；原有配置及素材保存在用户目录，安装新版时会继续使用。宿主需要处于前台；素材已就绪时，启动不应再依赖打开、关闭设置来唤醒宠物。宿主弹窗出现时保持贴附主窗口；窗口辅助组件或宠物页面意外退出后会自动尝试恢复，连续失败最多重试三次，状态区会保留故障提示。
 
@@ -83,6 +83,10 @@ npm run typecheck
 npm test
 npm run test:e2e
 npm run test:scaling
+npm run test:menu
+npm run test:recovery
+npm run test:native
+npm run test:transport
 npm run package
 npm run test:package
 ```

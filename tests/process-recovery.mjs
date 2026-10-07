@@ -5,8 +5,12 @@ import { mkdir } from 'node:fs/promises';
 
 // 全程只使用本项目模拟宿主和 DeepSeek 模拟余额，不连接任何真实查询服务。
 const directory = path.resolve('.test-artifacts', 'process-recovery-' + Date.now());
+const packed = process.argv.includes('--package');
 await mkdir(directory, { recursive: true });
-const application = await electron.launch({ args: ['.', '--demo', '--test', '--user-data', directory, '--fixture-assets', path.resolve('.asset-cache/assets')], timeout: 30_000 });
+const application = await electron.launch({
+  ...(packed ? { executablePath: path.resolve('release/win-unpacked/XiaokeWidget.exe') } : {}),
+  args: [...(packed ? [] : ['.']), '--demo', '--test', '--user-data', directory, '--fixture-assets', path.resolve('.asset-cache/assets')], timeout: 30_000,
+});
 const watchdog = setTimeout(() => application.process().kill(), 45_000);
 async function waitForVisible() {
   return application.evaluate(async ({ BrowserWindow }) => {

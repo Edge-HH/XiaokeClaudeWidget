@@ -163,6 +163,6 @@ try {
   await overlay.waitForTimeout(400);
   assert.equal(await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find(window => window.getTitle() === '小克额度宠物').isVisible()), false);
   assert.equal(errors.length, 0, errors.join('\n'));
-  await writeFile(path.join(artifacts, 'result.json'), JSON.stringify({ passed: true, nativeHelperMode: 'mock', queryMode: 'mock', realClaudeQueries: false, originalPetPixelMatch: true, nativeMouseStyles: true, actualSystemMouseInput: nativeInputAvailable, foregroundFixtures:true, petContextMenu: true, settingsRoundTrip: true, errors, screenshots: ['pet-subscription.png', 'pet-original-match.png', 'settings.png', 'resources.png'], geometry, resized }, null, 2));
+  await writeFile(path.join(artifacts, 'result.json'), JSON.stringify({ passed: true, nativeHelperMode: 'mock', queryMode: 'mock', realClaudeQueries: false, originalPetPixelMatch: true, nativeMouseStyles: true, actualSystemMouseInput: nativeInputAvailable, foregroundFixtures:true, petContextMenu: true, settingsRoundTrip: true, errors, screenshots: ['pet-balance.png', 'pet-original-match.png', 'settings.png', 'resources.png'], geometry, resized }, null, 2));
   console.log('离线桌面验收通过：' + artifacts);
 } finally { clearTimeout(watchdog); await application.evaluate(({app})=>app.quit()).catch(()=>{}); await application.close().catch(()=>{}); }

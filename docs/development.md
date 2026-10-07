@@ -42,6 +42,8 @@ Claude 订阅数据保留五小时／周百分比与服务端重置时间；窗�
 
 数据和存储测试使用本地服务与模拟响应；UI 验收启动本项目 Electron 与模拟宿主。真实 Claude Desktop 和真实账户查询未验证，不能在报告中写成“已实测兼容”。
 
+`npm run test:transport` 在本项目 Electron 中执行构建产物的 HTTP transport，独立会话仅允许指定 `127.0.0.1` fixture；Providers、凭据头和响应解析仍使用真实代码。Playwright 的主进程 evaluate 不支持 ESM 动态导入，因此测试传入已构建函数的源码执行，不维护重复实现。
+
 `npm run test:lifecycle` 验证宠物及全部窗口销毁后的周期回调和延迟回调。该测试捕获主进程异常，避免错误对话框阻塞自动验收；`node tests/window-lifecycle.mjs --package` 对打包成品执行同一检查。访问 Electron 窗口状态前先检查 `isDestroyed()`，窗口 `closed` 与应用 `before-quit` 都要清理所属定时器。
 
 0.1.4 的桌面桥接在原版 DOM 初始化末尾同步安装监听器，`desktop:ready` 使用 invoke 回执并返回初始位置和快照；未确认时仅重试内部 IPC。主进程在隐藏／未就绪时也同步宿主边界，文档加载完成可恢复窗口显示，不能把显示永久押在单次 ready 通知上。原版首次初始化异常由构建补丁转成固定失败状态，不传异常文本或凭据。透明宠物关闭 `backgroundThrottling`，隐藏时额度轮询仍由主进程暂停；音频隐藏挂起使用主进程传入的可见状态。

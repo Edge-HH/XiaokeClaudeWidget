@@ -1,6 +1,6 @@
 {
   "name": "xiaoke-claude-widget",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "private": true,
   "description": "保留原版小克造型与交互的 Windows 额度宠物",
   "author": "XiaokeClaudeWidget contributors",
@@ -18,6 +18,10 @@
     "test:package": "node tests/desktop-matrix.mjs --package",
     "test:lifecycle": "npm run build && node tests/window-lifecycle.mjs",
     "test:viewport": "npm run build && node tests/viewport-recovery.mjs",
+    "test:recovery": "npm run build && node tests/process-recovery.mjs",
+    "test:menu": "npm run build && node tests/menu-bounds.mjs",
+    "test:native": "dotnet run --project tests/WindowPolicy/WindowPolicy.csproj",
+    "test:transport": "npm run build && node tests/electron-transport.mjs",
     "upstream:check": "node tools/sync-upstream.mjs --check",
     "native:build": "dotnet publish native/WindowBridge/WindowBridge.csproj -c Release -r win-x64 --self-contained true -o dist/native -p:PublishSingleFile=true",
     "package": "npm run build && npm run native:build && node tools/check-package.mjs && electron-builder --win nsis portable"
