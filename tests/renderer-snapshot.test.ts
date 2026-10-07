@@ -60,4 +60,36 @@ describe('查询来源在额度泡泡中的显示', () => {
     context.applyDesktopSnapshot({ ...snapshot('deepseek', 'loading'), data: null, message: '' });
     expect(context.hideBubble).toHaveBeenCalledOnce();
   });
+
+  it('DeepSeek 来源标题单行省略，完整名称保留在提示中，不能把长名称折到泡泡外', () => {
+    const context = harness();
+    const sourceName = '很长的余额来源'.repeat(10);
+    context.applyDesktopSnapshot({ ...snapshot('deepseek'), sourceName });
+    const [module] = context.desktopDisplayModules([{ type: 'text', text: 'DeepSeek 余额', size: 8 }]);
+    const element = { isConnected: true, textContent: '', style: {}, title: '' };
+    context.desktopDataRowRegister(element, module, element);
+    expect(element.style).toMatchObject({ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' });
+    expect(element.title).toContain(sourceName);
+    expect(module.text).toContain(sourceName);
+    expect(module._desktopLabel).toBe(true);
+  });
+
+  it('未适配的旧厂商额度模块明确指向查询来源配置，不能沿用旧余额或一直加载', () => {
+    const context = harness();
+    context.applyDesktopSnapshot(snapshot());
+    expect(context.desktopBubbleRow({ type: 'balance', modelId: 'legacy-provider' })).toBe('请到查询来源配置');
+    const [module] = context.desktopDisplayModules([{ type: 'balance', modelId: 'legacy-provider', tpl: '{balance}' }]);
+    expect(module.type).toBe('text');
+    expect(module.text).toBe('请到查询来源配置');
+  });
+
+  it('旧三行泡泡进入随机台词前清除来源标题省略样式，保留原版换行行为', () => {
+    const context = harness();
+    const element = { style: {}, title: '' };
+    context.applyDesktopSnapshot(snapshot());
+    context.desktopFitSourceLabel(element);
+    context.desktopClearSourceLabel(element);
+    expect(element.style).toMatchObject({ maxWidth: '', whiteSpace: '', overflow: '', textOverflow: '', display: '' });
+    expect(element.title).toBe('');
+  });
 });
