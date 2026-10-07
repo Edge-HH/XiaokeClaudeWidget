@@ -52,7 +52,9 @@ export class UpstreamHost {
     };
     try { await route.handler(request, response); } catch { return new Response('原版设置接口处理失败', { status: 500 }); }
     if (!ended) return new Response('原版接口未完成响应', { status: 500 });
-    return new Response(new Uint8Array(Buffer.concat(chunks)), { status, headers });
+    // 原版静音槽返回 204；WHATWG Response 不允许空响应状态携带任何 body（即使零字节）。
+    const responseBody = input.method === 'HEAD' || [204, 205, 304].includes(status) ? null : new Uint8Array(Buffer.concat(chunks));
+    return new Response(responseBody, { status, headers });
   }
   dispose() { for (const dispose of this.disposers) dispose(); this.routes = []; }
 }
