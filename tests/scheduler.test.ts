@@ -108,3 +108,48 @@ it('provider 的意外异常显示可重试查询错误，不冒充凭据解密�
   expect(scheduler.snapshot()).toMatchObject({ status: 'ready', data });
   scheduler.dispose();
 });
+it('来源切换与重新保存配置均不绕过当前来源的服务端限流', async () => {
+  let now = 0, count = 0;
+  const scheduler = new UsageScheduler({ getSnapshot: async () => { count++; throw new QueryError('rate-limit', '限流', 120_000); } }, source, () => 'mock', () => {}, () => now);
+  await scheduler.refresh(true);
+  scheduler.select({ ...source, id: 'other' });
+  scheduler.select(source, true);
+  await scheduler.refresh(true); expect(count).toBe(1);
+  now = 120_001; await scheduler.refresh(true); expect(count).toBe(2);
+  scheduler.dispose();
+});
+it('保存新凭据清除原快照，查询失败不能冒充上个账户的旧余额', async () => {
+  let fail = false;
+  const scheduler = new UsageScheduler({ getSnapshot: async () => { if (fail) throw new QueryError('auth', '新密钥无效'); return data; } }, source, () => 'mock');
+  await scheduler.refresh(true);
+  scheduler.select(source, true);
+  expect(scheduler.snapshot()).toMatchObject({ status: 'unconfigured', data: null });
+  fail = true; await scheduler.refresh(true);
+  expect(scheduler.snapshot()).toMatchObject({ status: 'error', data: null });
+  scheduler.dispose();
+});
+it('隐藏取消的旧鉴权失败不暂停新查询，销毁时也取消隐藏状态的手动查询', async () => {
+  let now = 0, count = 0;
+  let rejectOld!: (error: QueryError) => void;
+  let signal!: AbortSignal;
+  const scheduler = new UsageScheduler({ getSnapshot: (_config, _secret, currentSignal) => {
+    signal = currentSignal; count++;
+    return count === 1 ? new Promise((_resolve, reject) => { rejectOld = reject; }) : Promise.resolve(data);
+  } }, source, () => 'mock', () => {}, () => now);
+  const old = scheduler.refresh(true);
+  scheduler.setVisible(true); scheduler.setVisible(false); scheduler.setVisible(true);
+  await scheduler.refresh();
+  rejectOld(new QueryError('auth', '取消的旧密钥失败')); await old;
+  now = 60_001; await scheduler.refresh(); expect(count).toBe(3);
+  scheduler.dispose(); await scheduler.refresh(true); expect(count).toBe(3);
+  const hidden = new UsageScheduler({ getSnapshot: (_config, _secret, currentSignal) => { signal = currentSignal; return new Promise(() => {}); } }, source, () => 'mock');
+  void hidden.refresh(true); hidden.dispose(); expect(signal.aborted).toBe(true);
+});
+it('凭据读取故障仍明确要求重新配置，不按网络错误反复读取', async () => {
+  let count = 0;
+  const scheduler = new UsageScheduler({ getSnapshot: async () => { count++; return data; } }, source, () => { throw new Error('解密失败'); });
+  await scheduler.refresh(true);
+  expect(scheduler.snapshot()).toMatchObject({ status: 'unconfigured', message: '凭据读取失败，请重新配置。' });
+  expect(count).toBe(0);
+  scheduler.dispose();
+});

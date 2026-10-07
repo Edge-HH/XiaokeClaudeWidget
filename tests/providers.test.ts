@@ -60,3 +60,71 @@ describe('真实 transport 的错误处理仅使用本机 HTTP 服务', () => {
     } finally { await new Promise<void>(resolve => server.close(() => resolve())); }
   });
 });
+
+describe('非 Claude 查询回归', () => {
+  const deepseek: SourceConfig = { id: 'deepseek', name: '余额', kind: 'deepseek' };
+  it('API Key 接受常见 Bearer 前缀，发送前去掉外部空白', async () => {
+    const requests: { url: string; headers: Record<string, string> }[] = [];
+    const providers = new Providers(async (url, headers) => {
+      requests.push({ url, headers });
+      return { balance_infos: [{ currency: 'CNY', total_balance: '12.50' }] };
+    }, { allowClaude: false });
+    await providers.getSnapshot(deepseek, '  Bearer sk-local-fixture  ', new AbortController().signal);
+    expect(requests).toEqual([{ url: 'https://api.deepseek.com/user/balance', headers: { Authorization: 'Bearer sk-local-fixture', Accept: 'application/json' } }]);
+  });
+  it('非法 API Key 在 transport 前明确报配置错误，不变成网络错误', async () => {
+    let count = 0;
+    const providers = new Providers(async () => { count++; return {}; }, { allowClaude: false });
+    for (const secret of ['Bearer ', 'two keys', 'sk-fixture\n']) {
+      await expect(providers.getSnapshot(deepseek, secret, new AbortController().signal)).rejects.toMatchObject({ code: 'configuration' });
+    }
+    expect(count).toBe(0);
+  });
+  it('New API 面板访问令牌允许省略新版不要求的用户 ID', async () => {
+    const requests: { url: string; headers: Record<string, string> }[] = [];
+    const providers = new Providers(async (url, headers) => {
+      requests.push({ url, headers });
+      return url.endsWith('/api/status') ? { data: {} } : { success: true, data: { quota: 123, used_quota: 45 } };
+    }, { allowClaude: false });
+    await expect(providers.getSnapshot({ ...token, kind: 'newapi-account' }, 'nap_local-fixture', new AbortController().signal)).resolves.toMatchObject({ scope: 'account', remaining: 123 });
+    expect(requests[0].headers).not.toHaveProperty('New-Api-User');
+    await providers.getSnapshot({ ...token, kind: 'newapi-account', userId: '12' }, 'local-fixture', new AbortController().signal);
+    expect(requests[2].headers['New-Api-User']).toBe('12');
+  });
+  it('New API 站点复制 /v1 模型地址时在发出凭据前提示根地址', async () => {
+    let count = 0;
+    const providers = new Providers(async () => { count++; return {}; }, { allowClaude: false });
+    await expect(providers.getSnapshot({ ...token, baseUrl: 'https://example.invalid/v1/' }, 'local-fixture', new AbortController().signal)).rejects.toMatchObject({ code: 'configuration', message: expect.stringContaining('根地址') });
+    expect(count).toBe(0);
+  });
+  it('空白额度不能转换成零余额，站点无限或缺失汇率不能变成无限金额', () => {
+    const payload = { data: { total_available: 500_000, total_used: 0, total_granted: 500_000 } };
+    expect(() => parseDeepSeekBalance({ balance_infos: [{ currency: 'CNY', total_balance: '   ' }] })).toThrow(QueryError);
+    expect(parseNewApiUsage(payload, { data: { quota_per_unit: 500_000, quota_display_type: 'CNY', usd_exchange_rate: 'Infinity' } }, token)).toMatchObject({ unit: '额度', remaining: 500_000 });
+    expect(parseNewApiUsage(payload, { data: { quota_per_unit: 500_000, quota_display_type: 'CUSTOM', custom_currency_exchange_rate: 7, custom_currency_symbol: '' } }, token)).toMatchObject({ unit: '额度', remaining: 500_000 });
+  });
+  it('New API 服务端临时故障可重试，明确无效令牌仍提示重新配置', () => {
+    expect(() => parseNewApiUsage({ success: false, message: '数据库连接失败' }, null, token)).toThrow(expect.objectContaining({ code: 'network' }));
+    expect(() => parseNewApiUsage({ success: false, message: 'Invalid token' }, null, token)).toThrow(expect.objectContaining({ code: 'auth' }));
+  });
+  it('响应正文读取被取消时显示网络错误，不误报接口格式变化', async () => {
+    const controller = new AbortController();
+    const transport = createHttpTransport(async () => ({ ok: true, status: 200, headers: new Headers(), json: async () => { controller.abort(); throw new Error('读取取消'); } }));
+    await expect(transport('http://127.0.0.1/fixture', {}, controller.signal)).rejects.toMatchObject({ code: 'network' });
+  });
+  it('站点换算参数查询失败时保留已成功的原始额度', () => {
+    const payload = { data: { total_available: 500_000, total_used: 0, total_granted: 500_000 } };
+    expect(parseNewApiUsage(payload, { success: false, data: { quota_per_unit: 500_000, quota_display_type: 'USD' } }, token)).toMatchObject({ unit: '额度', remaining: 500_000 });
+  });
+  it('New API 子路径保留，连续尾斜杠规范化，元数据请求不发送 API Key', async () => {
+    const requests: { url: string; headers: Record<string, string> }[] = [];
+    const providers = new Providers(async (url, headers) => {
+      requests.push({ url, headers });
+      if (url.endsWith('/api/status')) throw new QueryError('network', '参数暂时不可用');
+      return { data: { total_available: 100, total_used: 50, total_granted: 150 } };
+    }, { allowClaude: false });
+    await expect(providers.getSnapshot({ ...token, baseUrl: 'https://example.invalid/gateway///' }, 'Bearer local-fixture', new AbortController().signal)).resolves.toMatchObject({ unit: '额度', remaining: 100 });
+    expect(requests.map(request => request.url)).toEqual(['https://example.invalid/gateway/api/usage/token/', 'https://example.invalid/gateway/api/status']);
+    expect(requests[1].headers).toEqual({});
+  });
+});
