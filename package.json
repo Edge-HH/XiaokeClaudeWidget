@@ -1,0 +1,43 @@
+{
+  "name": "xiaoke-claude-widget",
+  "version": "0.1.5",
+  "private": true,
+  "description": "保留原版小克造型与交互的 Windows 额度宠物",
+  "author": "XiaokeClaudeWidget contributors",
+  "license": "MIT",
+  "type": "module",
+  "main": "dist/main/main.js",
+  "scripts": {
+    "dev": "npm run build && electron . --demo",
+    "start": "electron .",
+    "build": "tsc && node tools/build-desktop.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:e2e": "npm run build && node tests/e2e.mjs",
+    "test:scaling": "npm run build && node tests/desktop-matrix.mjs",
+    "test:package": "node tests/desktop-matrix.mjs --package",
+    "test:lifecycle": "npm run build && node tests/window-lifecycle.mjs",
+    "test:viewport": "npm run build && node tests/viewport-recovery.mjs",
+    "upstream:check": "node tools/sync-upstream.mjs --check",
+    "native:build": "dotnet publish native/WindowBridge/WindowBridge.csproj -c Release -r win-x64 --self-contained true -o dist/native -p:PublishSingleFile=true",
+    "package": "npm run build && npm run native:build && node tools/check-package.mjs && electron-builder --win nsis portable"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "electron": "44.6.0",
+    "electron-builder": "26.15.3",
+    "playwright": "1.63.0",
+    "typescript": "5.9.3",
+    "vitest": "3.2.4"
+  },
+  "build": {
+    "appId": "io.github.edgehh.xiaokewidget",
+    "productName": "小克额度宠物",
+    "directories": { "output": "release" },
+    "files": ["dist/main/**", "dist/shared/**", "dist/renderer/**", "dist/vendor/**", "package.json", "LICENSE", "NOTICE.md", "README.md", "docs/development.md", "docs/validation.md"],
+    "extraResources": [{ "from": "dist/native", "to": "native", "filter": ["WindowBridge.exe"] }, { "from": "vendor/upstream/asset-manifest.json", "to": "asset-manifest.json" }],
+    "win": { "target": ["nsis", "portable"], "executableName": "XiaokeWidget", "signAndEditExecutable": false },
+    "nsis": { "oneClick": false, "perMachine": false, "allowToChangeInstallationDirectory": true, "artifactName": "XiaokeWidget-${version}-setup.${ext}" },
+    "portable": { "artifactName": "XiaokeWidget-${version}-portable.${ext}" }
+  }
+}

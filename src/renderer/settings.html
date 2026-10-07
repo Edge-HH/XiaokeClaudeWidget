@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>小克 · 查询来源与素材</title><link rel="stylesheet" href="/settings.css"></head>
+<body><main class="settings-page">
+  <header><p class="eyebrow">小克额度宠物</p><h1>查询来源与素材</h1><p id="mode-note">额度查询与窗口贴附相互独立。只查询你选择的来源。</p></header>
+  <section aria-labelledby="attachment-title"><h2 id="attachment-title">窗口贴附状态</h2><p id="attachment-state" role="status">正在读取显示状态…</p><p id="attachment-details" class="hint"></p><p class="hint">这里仅显示小克版本、页面和窗口状态。额度未配置或查询失败不会阻止宠物显示。</p></section>
+  <section aria-labelledby="assets-title"><h2 id="assets-title">原版造型与音效</h2><p id="asset-state" role="status">正在检查素材…</p><div class="actions"><button id="download-assets" class="primary">获取原版素材</button><button id="import-assets">从本地目录导入</button></div><p class="hint">素材来自固定版本的原版插件，不属于本项目 MIT 许可。下载后保持原样；不会下载或启动 Claude 程序。</p></section>
+  <section aria-labelledby="source-title"><div class="section-head"><h2 id="source-title">查询来源</h2><button id="new-source">新增来源</button></div><label for="source-select">已保存的来源</label><div class="source-choice"><select id="source-select"></select><button id="activate-source">使用此来源</button><button id="remove-source">删除</button></div>
+  <form id="source-form">
+    <div class="columns"><label>名称<input id="source-name" required maxlength="80" autocomplete="off"></label><label>类型<select id="source-kind"><option value="claude">Claude 订阅额度</option><option value="deepseek">DeepSeek 账户余额</option><option value="newapi-token">New API 令牌额度</option><option value="newapi-account">New API 账户余额</option></select></label></div>
+    <label id="base-row" hidden>New API 站点地址<input id="base-url" type="url" placeholder="https://your-newapi.example.com" autocomplete="off"><span class="hint">填写站点根地址；不要填写模型请求的 /v1 路径。</span></label>
+    <label><span id="secret-label">sessionKey</span><input id="source-secret" type="password" autocomplete="new-password" spellcheck="false" placeholder="填写查询凭据"><span id="secret-state" class="hint">凭据使用当前 Windows 账户加密保存。</span></label>
+    <div id="claude-fields"><div class="source-choice"><label class="grow">Claude 组织<select id="organization"><option value="">请读取组织列表</option></select></label><button type="button" id="load-organizations">读取组织列表</button></div><p class="hint">填写同一个 Claude 账号的 sessionKey 值，然后读取组织列表。五小时、周额度由账号共享，不是 Desktop 单独用量。获取方法见 README；这里不会自动打开登录程序。</p></div>
+    <label id="user-row" hidden>New API 用户 ID<input id="user-id" inputmode="numeric" pattern="[0-9]+" placeholder="例如 123"><span class="hint">账户访问令牌与 API Key 不同，请使用站点个人设置里的账户访问令牌。</span></label>
+    <details id="conversion-fields" hidden><summary>手动额度换算（可选）</summary><p class="hint">默认读取站点换算参数；参数不足时显示原始“额度”。只有知道站点口径时才填写。</p><div class="columns"><label>每单位额度<input id="quota-unit" type="number" min="0.000001" step="any" placeholder="例如 500000"></label><label>显示币种<select id="currency"><option value="">跟随站点</option><option value="QUOTA">原始额度</option><option value="USD">美元 USD</option><option value="CNY">人民币 CNY</option></select></label></div><label>美元到显示币种的换算率<input id="currency-rate" type="number" min="0.000001" step="any" placeholder="人民币显示时可填写"></label></details>
+    <p id="scope-note" class="hint"></p><div class="actions"><button type="submit" class="primary" id="save-source">保存并使用</button><button type="button" id="test-source">测试查询</button></div>
+  </form></section>
+  <section aria-labelledby="usage-title"><div class="section-head"><h2 id="usage-title">当前额度</h2><button id="refresh-usage">刷新</button></div><output id="usage-output">尚未查询</output><p id="observed-at" class="hint"></p></section>
+  <p id="status" role="status" aria-live="polite"></p><footer><p>默认每分钟刷新；宠物隐藏时暂停自动查询。每轮消耗、生成等待和任务结束提示没有聊天事件，显示为不可用。</p><button id="close-settings">关闭设置</button></footer>
+</main><script src="/settings.js"></script></body></html>

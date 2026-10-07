@@ -1,0 +1,47 @@
+# 开发与维护
+
+## 边界
+
+未打包程序和 `--demo` 使用 mock transport 与本项目模拟窗口。测试禁止启动 Claude Desktop、Claude Code、DSH 或其他 Claude 工具，禁止查询真实 Claude 账号。不要为了验证本项目而读取 Claude 登录文件、开启调试端口或运行相关 CLI。真实接口访问仅在用户运行打包成品时启用；查询都是 GET，不调用模型。
+
+宿主元数据由 `.NET 10` 辅助组件取得，仅使用 Win32 的窗口句柄、进程文件名、客户区位置、可见性和前台状态。使用 OUTOFCONTEXT 事件，不注入 DLL。原生 mock 模式必须传入本项目模拟窗口句柄及 Electron PID；该路径不枚举 Claude。辅助进程隐藏启动并随小克退出。
+
+## 原版与适配
+
+`vendor/upstream` 是固定版本的原始代码及许可，不手改。`source-manifest.json` 校验 SHA-256。`tools/build-desktop.mjs` 使用检查过的文本锚点和语法树生成桌面版本；缺少或重复锚点立即失败。
+
+原版宿主模块作为本进程的设置／素材处理库执行，不创建 DSH 服务。渲染页面通过 `xiaoke://app` 内部协议访问它，不开启本机 HTTP 端口。配置目录替换为小克自身目录，原版网络查询和 Codex 会话读取停用。新的来源都通过 `UsageProvider`；秘密仅存加密文件，不回传已保存密钥。
+
+Claude 订阅数据保留五小时／周百分比与服务端重置时间；窗口缺失显示“—”。DeepSeek 的余额进入原版精确观测账本，账号 scope 按来源及凭据哈希隔离。New API 分别解析令牌与账户，参数不足保留原始额度。
+
+## 验收与交付
+
+当前交付约定：由用户自行测试，助手只编译与打包。用户没有重新要求测试前，不运行单元／桌面／成品测试，不启动宠物、模拟宿主、窗口辅助组件或只读观测脚本。编译 .NET 辅助组件不等于运行它。
+
+数据和存储测试使用本地服务与模拟响应；UI 验收启动本项目 Electron 与模拟宿主。真实 Claude Desktop 和真实账户查询未验证，不能在报告中写成“已实测兼容”。
+
+`npm run test:lifecycle` 验证宠物及全部窗口销毁后的周期回调和延迟回调。该测试捕获主进程异常，避免错误对话框阻塞自动验收；`node tests/window-lifecycle.mjs --package` 对打包成品执行同一检查。访问 Electron 窗口状态前先检查 `isDestroyed()`，窗口 `closed` 与应用 `before-quit` 都要清理所属定时器。
+
+0.1.4 的桌面桥接在原版 DOM 初始化末尾同步安装监听器，`desktop:ready` 使用 invoke 回执并返回初始位置和快照；未确认时仅重试内部 IPC。主进程在隐藏／未就绪时也同步宿主边界，文档加载完成可恢复窗口显示，不能把显示永久押在单次 ready 通知上。原版首次初始化异常由构建补丁转成固定失败状态，不传异常文本或凭据。透明宠物关闭 `backgroundThrottling`，隐藏时额度轮询仍由主进程暂停；音频隐藏挂起使用主进程传入的可见状态。
+
+设置的窗口贴附状态每秒读取主进程元数据，仅包含运行版本、辅助组件、宿主可见／前台、页面／桥接及位置回执状态，不查询账号、不回传宿主标题或路径，不重新填充来源表单。原生匹配使用确切进程文件名和窗口样式；带 owner 的顶层窗口可以是正常宿主，不能使用 `GW_OWNER != 0` 一概排除。子窗口与工具窗口仍排除。再次启动的非主实例只退出，不继续初始化辅助组件。
+
+`desktop:placement` 是独立的位置恢复通道，触发于就绪、显示、客户区变化、托盘及原版菜单关闭。原版 `viewport()` 保持浏览器 CSS 坐标，主进程客户区尺寸只作为重新测量提示；不能像 0.1.2 一样用缓存的 DIP 尺寸替代整个浏览器视口。复用 `settle`／`applyAnchorPos`，恢复时清除旧过渡，连续两帧测量后回执，由主进程 `invalidate()` 完整重绘。窗口隐藏或托盘菜单打开时取消未结束的宠物拖动；普通拖动不被周期恢复抢走。
+
+0.1.5 可见期间使用 `setAlwaysOnTop` 保持覆盖层级，离开宿主／小克界面时隐藏并撤销顶置；设置在前台时位于覆盖层之上，失去本项目前台后也撤销设置顶置。托盘原生菜单期间不提升覆盖层。`isVisible()` 与位置回执只表示窗口状态，不能写成实际绘制／鼠标验收成功。
+
+普通菜单与键盘编辑分开：`menuOpen` 只表示菜单开合，可编辑控件取得焦点才启用 `setFocusable`，随后重新设置 `skipTaskbar`。失焦或隐藏取消键盘请求。MutationObserver 立即同步菜单/编辑状态，不能等待下一次鼠标移动。Windows 穿透使用 `forward:false`，唯一跨窗口光标来源是主进程 32 ms IPC；原版 alpha 命中保持不变。拖动采用 DOM pointer capture，正常松手、取消及捕获丢失统一收尾；原版真实移动的 `buttons=0` 收尾仍保留。非激活窗口的鼠标捕获有系统边界，不能假定捕获一定收到窗口外松手：[Win32 SetCapture](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setcapture)。显示恢复、焦点样式变化和位置回执之后重新断言鼠标穿透状态，避免只相信缓存的命中布尔值。设置拥有的原生目录选择框也保持在覆盖层之上。
+
+原生组件每轮只获取一次前台 HWND，宿主前台与小克前台分开报告。仅 `GetForegroundWindow()==0` 的激活过渡允许保留最后稳定状态最多 150 ms，且历史 HWND 必须仍有效；非零的其他应用立即生效，不能用统一延迟保持宠物显示。模拟模式持续复查传入 HWND 的所属 PID，不枚举真实宿主。
+
+这些调整来自源码诊断：[Electron 44.6.0 窗口焦点／鼠标样式实现](https://github.com/electron/electron/blob/v44.6.0/shell/browser/native_window_views.cc)、[鼠标转发实现](https://github.com/electron/electron/blob/v44.6.0/shell/browser/native_window_views_win.cc)、[Win32 空前台语义](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getforegroundwindow)。不是本项目运行验证记录。
+
+原生组件的 `refresh` 指令只重新读取并重发窗口元数据。主进程仅在边界变化或实际漂移时设置窗口位置；原生菜单与原版编辑菜单显示期间不反复 `moveTop()`。关闭菜单后重新读取宿主并恢复透明窗口，不能只依赖设置窗口的焦点事件。
+
+`npm run test:viewport` 重放「较小客户区、角色仍在旧的大窗口右下角」：人为屏蔽模拟页面的 resize 回调，经过托盘菜单及隐藏／恢复后检查角色可见、可再次拖动且位置记忆有效。`node tests/viewport-recovery.mjs --package` 验证打包成品。`tools/debug/` 的只读观测工具仅记录小克进程及其图像边界，不查询账号、不读取宿主内容；临时探索脚本不参与验收或打包。
+
+构建环境需要 Node 22 和 .NET 10 SDK。Electron 与打包器固定版本，`package-lock.json` 固定依赖。Windows 辅助组件自包含，不依赖用户预装 .NET。
+
+公开包只包含生成代码、辅助组件、许可与素材校验清单。图片、动图、音频、用户配置、凭据、测试截图不进入包。`tools/check-package.mjs` 在打包前检查这些边界。素材下载由用户点击触发，失败可导入原版目录；不改变上游素材许可。
+
+有主要功能或机制变化时同步更新 README、开发说明及相关 ADR。删除仓库、分支或大目录前按 AGENTS 要求备份到 `D:\CodexBackup`。

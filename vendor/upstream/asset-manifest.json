@@ -1,0 +1,65 @@
+{
+  "commit": "4822bac4acc742ad91787495b9dd9ec32a38b1b7",
+  "assets": [
+    {
+      "name": "D1.mp3",
+      "gitSha": "0bf91192d11b4923ad7e270457bdd5b2bf974f81",
+      "size": 3294,
+      "url": "https://raw.githubusercontent.com/aklnaaw/dsh-xiaoke-widget/4822bac4acc742ad91787495b9dd9ec32a38b1b7/assets/D1.mp3"
+    },
+    {
+      "name": "D2.mp3",
+      "gitSha": "3efbd5ad630fb510bbb726e4cf5fd27b1c32d18d",
+      "size": 4232,
+      "url": "https://raw.githubusercontent.com/aklnaaw/dsh-xiaoke-widget/4822bac4acc742ad91787495b9dd9ec32a38b1b7/assets/D2.mp3"
+    },
+    {
+      "name": "Ya1.mp3",
+      "gitSha": "a4a566f788042c18b9372f77fcaaaac44377f5d5",
+      "size": 6370,
+      "url": "https://raw.githubusercontent.com/aklnaaw/dsh-xiaoke-widget/4822bac4acc742ad91787495b9dd9ec32a38b1b7/assets/Ya1.mp3"
+    },
+    {
+      "name": "Ya2.mp3",
+      "gitSha": "77e9397beb69837fec05ca1cb02c30eff3b34763",
+      "size": 2976,
+      "url": "https://raw.githubusercontent.com/aklnaaw/dsh-xiaoke-widget/4822bac4acc742ad91787495b9dd9ec32a38b1b7/assets/Ya2.mp3"
+    },
+    {
+      "name": "bubble-money1.gif",
+      "gitSha": "0ebaa533b6d03f078c357c4f38e3b189ef8e41dd",
+      "size": 2704365,
+      "url": "https://raw.githubusercontent.com/aklnaaw/dsh-xiaoke-widget/4822bac4acc742ad91787495b9dd9ec32a38b1b7/assets/bubble-money1.gif"
+    },
+    {
+      "name": "bubble-petpet.gif",
+      "gitSha": "1c2b23427af9cd885c2081f2eaa41c994bca43ca",
+      "size": 94643,
+      "url": "https://raw.githubusercontent.com/aklnaaw/dsh-xiaoke-widget/4822bac4acc742ad91787495b9dd9ec32a38b1b7/assets/bubble-petpet.gif"
+    },
+    {
+      "name": "minecraft-exp-orb.wav",
+      "gitSha": "2d88f342d776ed980451c544711840b9fe819db0",
+      "size": 59488,
+      "url": "https://raw.githubusercontent.com/aklnaaw/dsh-xiaoke-widget/4822bac4acc742ad91787495b9dd9ec32a38b1b7/assets/minecraft-exp-orb.wav"
+    },
+    {
+      "name": "rua.gif",
+      "gitSha": "1c2b23427af9cd885c2081f2eaa41c994bca43ca",
+      "size": 94643,
+      "url": "https://raw.githubusercontent.com/aklnaaw/dsh-xiaoke-widget/4822bac4acc742ad91787495b9dd9ec32a38b1b7/assets/rua.gif"
+    },
+    {
+      "name": "task-end-a.wav",
+      "gitSha": "3c1f768de0c1b5b23be798e2582f9f5a0bab4295",
+      "size": 319288,
+      "url": "https://raw.githubusercontent.com/aklnaaw/dsh-xiaoke-widget/4822bac4acc742ad91787495b9dd9ec32a38b1b7/assets/task-end-a.wav"
+    },
+    {
+      "name": "xiaoke1.png",
+      "gitSha": "05c3871f3cf7c1566889199c6063b6edddac91c9",
+      "size": 461395,
+      "url": "https://raw.githubusercontent.com/aklnaaw/dsh-xiaoke-widget/4822bac4acc742ad91787495b9dd9ec32a38b1b7/assets/xiaoke1.png"
+    }
+  ]
+}

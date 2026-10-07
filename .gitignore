@@ -1,0 +1,9 @@
+node_modules/
+dist/
+release/
+.test-artifacts/
+.asset-cache/
+native/**/bin/
+native/**/obj/
+*.log
+

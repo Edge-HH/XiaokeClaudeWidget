@@ -1,0 +1,12 @@
+{
+  "repository": "aklnaaw/dsh-xiaoke-widget",
+  "commit": "4822bac4acc742ad91787495b9dd9ec32a38b1b7",
+  "files": {
+    "lib/xiaoke-widget.js": "4b13076f24734cee2717f4149f0c281dd872d832cdd670025c287652b792bd09",
+    "lib/xiaoke-index.js": "c6f6b4aa91e0ae9e42884720a9e6264e7fa683fc80611fb44d6180e4fa1bb53e",
+    "lib/accounting.mjs": "9ef56168269b3204b76d323ccd4498088ac7b3be930e3c9d645afd8c465d30dc",
+    "LICENSE": "a1e46acc1349f63e9d1e26a8a600823e010fedcaff20fc1eceb6564432bf829b",
+    "PROVENANCE.md": "d9c1b3ba01a5f2b0e0c53fddb72e2d08eeb3ae70336a59ebdea2225b1dbd0a2e",
+    "upstream/PROVENANCE.upstream.md": "798179d23d620e5f8be4220b75df008c97ebc821d8f69d2842d8af9cf69726e8"
+  }
+}

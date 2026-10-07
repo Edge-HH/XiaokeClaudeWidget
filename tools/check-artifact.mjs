@@ -1,0 +1,17 @@
+import { listPackage, extractFile } from '@electron/asar';
+import { stat } from 'node:fs/promises';
+import path from 'node:path';
+const archive='release/win-unpacked/resources/app.asar';
+const files=listPackage(archive).map(file=>file.replaceAll('\\','/'));
+const forbidden=files.filter(file=>/(?:credentials\.json|preferences\.json|\/assets\/|\.test-artifacts|\.asset-cache|\.(?:png|gif|mp3|wav)$)/i.test(file));
+if(forbidden.length) throw new Error('交付包包含禁止内容：'+forbidden.join(','));
+const extract=file=>extractFile(archive,path.normalize(file));
+for(const file of ['LICENSE','NOTICE.md','README.md','dist/vendor/LICENSE','dist/vendor/asset-manifest.json','dist/main/preload.cjs']) extract(file);
+const upstreamLicense=await (await import('node:fs/promises')).readFile('vendor/upstream/LICENSE','utf8');
+if(!extract('NOTICE.md').toString().includes(upstreamLicense.trim())) throw new Error('交付包缺少原版 MIT 版权与许可全文');
+const main=extract('dist/main/main.js').toString();
+if(!main.includes("createMockTransport() : createHttpTransport") || !main.includes('!app.isPackaged')) throw new Error('模拟模式隔离入口缺失');
+if(!extract('dist/vendor/lib/xiaoke-widget.js').toString().includes('!desktopSnapshot.data ||')) throw new Error('交付包未包含最新订阅状态保护');
+if(!extract('dist/vendor/lib/xiaoke-widget.js').toString().includes('desktopSyncPlacement(point.viewport)')) throw new Error('交付包未包含客户区与角色位置恢复');
+if((await stat('release/win-unpacked/resources/native/WindowBridge.exe')).size<1_000_000) throw new Error('自包含组件缺失');
+console.log('实际 ASAR 检查通过：原版许可和素材清单存在；没有素材、凭据或测试缓存');
