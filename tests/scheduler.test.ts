@@ -36,3 +36,75 @@ it.skip('本次禁止测试订阅路径：倒计时到期触发重新查询，�
   now = 20_001; await scheduler.refresh(); expect(count).toBe(2);
   expect(scheduler.snapshot()).toMatchObject({ data: { fiveHour: { usedPercent: 32 } } }); scheduler.dispose();
 });
+it('隐藏取消的查询不阻塞重新显示，旧请求不能修改新查询的重试节奏', async () => {
+  let now = 0, count = 0;
+  let resolveOld!: (data: UsageData) => void;
+  const scheduler = new UsageScheduler({ getSnapshot: () => {
+    count++;
+    return count === 1 ? new Promise(resolve => { resolveOld = resolve; }) : Promise.resolve(data);
+  } }, source, () => 'mock', () => {}, () => now);
+  const old = scheduler.refresh(true);
+  scheduler.setVisible(true);
+  scheduler.setVisible(false);
+  scheduler.setVisible(true);
+  await Promise.resolve(); await Promise.resolve();
+  expect(count).toBe(2);
+  expect(scheduler.snapshot()).toMatchObject({ status: 'ready', data });
+  now = 59_999; resolveOld(data); await old;
+  now = 60_001; await scheduler.refresh();
+  expect(count).toBe(3);
+  scheduler.dispose();
+});
+it('隐藏时恢复上次完成的余额快照，取消不留下永久查询中', async () => {
+  let count = 0;
+  let resolvePending!: (data: UsageData) => void;
+  const scheduler = new UsageScheduler({ getSnapshot: () => ++count === 1 ? Promise.resolve(data) : new Promise(resolve => { resolvePending = resolve; }) }, source, () => 'mock');
+  await scheduler.refresh(true);
+  scheduler.setVisible(true);
+  const pending = scheduler.refresh(true);
+  expect(scheduler.snapshot().status).toBe('loading');
+  scheduler.setVisible(false);
+  expect(scheduler.snapshot()).toMatchObject({ status: 'ready', data });
+  resolvePending(data); await pending;
+  expect(scheduler.snapshot()).toMatchObject({ status: 'ready', data });
+  scheduler.dispose();
+});
+it('临时网络失败后允许立即手动重试，仍由自动查询遵守退避', async () => {
+  let count = 0;
+  const scheduler = new UsageScheduler({ getSnapshot: async () => {
+    if (++count === 1) throw new QueryError('network', '网络暂时不可用');
+    return data;
+  } }, source, () => 'mock');
+  await scheduler.refresh(true);
+  await scheduler.refresh(true);
+  expect(count).toBe(2);
+  expect(scheduler.snapshot()).toMatchObject({ status: 'ready', data });
+  scheduler.dispose();
+});
+it('来源切换保留已查询余额，返回时再重新查询', async () => {
+  let fail = false;
+  const scheduler = new UsageScheduler({ getSnapshot: async () => {
+    if (fail) throw new QueryError('network', '网络暂时不可用');
+    return data;
+  } }, source, () => 'mock');
+  await scheduler.refresh(true);
+  scheduler.select({ ...source, id: 'other' }, false);
+  scheduler.select(source, false);
+  expect(scheduler.snapshot()).toMatchObject({ status: 'ready', data });
+  fail = true; await scheduler.refresh(true);
+  expect(scheduler.snapshot()).toMatchObject({ status: 'stale', data });
+  scheduler.dispose();
+});
+it('provider 的意外异常显示可重试查询错误，不冒充凭据解密故障', async () => {
+  let now = 0, count = 0;
+  const scheduler = new UsageScheduler({ getSnapshot: async () => {
+    if (++count === 1) throw new Error('意外响应解析错误');
+    return data;
+  } }, source, () => 'mock', () => {}, () => now);
+  await scheduler.refresh(true);
+  expect(scheduler.snapshot()).toMatchObject({ status: 'error' });
+  scheduler.setVisible(true); now = 60_001; await scheduler.refresh();
+  expect(count).toBe(2);
+  expect(scheduler.snapshot()).toMatchObject({ status: 'ready', data });
+  scheduler.dispose();
+});

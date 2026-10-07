@@ -190,7 +190,7 @@ function handle(channel: string, callback: (...args: any[]) => unknown) {
     try { return { ok: true, value: await callback(...args) }; } catch (error) { return { ok: false, error: error instanceof Error ? error.message : '操作失败。' }; }
   });
 }
-function selectSaved() { scheduler.select(activeSource()); void scheduler.refresh(true); sendSnapshot(scheduler.snapshot()); }
+function selectSaved(invalidateCache = false) { scheduler.select(activeSource(), invalidateCache); void scheduler.refresh(true); sendSnapshot(scheduler.snapshot()); }
 function installIpc() {
   ipcMain.handle('desktop:ready', event => {
     if (event.sender !== overlay?.webContents || !trusted(event)) return;
@@ -215,8 +215,8 @@ function installIpc() {
   handle('desktop:state', state);
   // 只返回本项目的显示状态；不读取凭据、不刷新额度、不返回宿主标题或聊天内容。
   handle('desktop:attachment', attachmentState);
-  handle('desktop:save', async (input: SourceConfig, secret: string) => { await store.save(input, secret); await store.activate(input.id); selectSaved(); return state(); });
-  handle('desktop:remove', async (id: string) => { await store.remove(id); selectSaved(); return state(); });
+  handle('desktop:save', async (input: SourceConfig, secret: string) => { await store.save(input, secret); await store.activate(input.id); selectSaved(true); return state(); });
+  handle('desktop:remove', async (id: string) => { await store.remove(id); selectSaved(true); return state(); });
   handle('desktop:activate', async (id: string) => { await store.activate(id); selectSaved(); return state(); });
   handle('desktop:organizations', (id: string, secret: string) => providers.organizations(secret || store.secret(id), AbortSignal.timeout(10_000)));
   handle('desktop:test-source', (input: SourceConfig, secret: string) => providers.getSnapshot(validateSource(input), secret || store.secret(input.id), AbortSignal.timeout(10_000)));
