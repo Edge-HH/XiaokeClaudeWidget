@@ -5,13 +5,13 @@ import type { SourceConfig } from '../src/shared/types.js';
 
 const token: SourceConfig = { id: 'token', name: '中转令牌', kind: 'newapi-token', baseUrl: 'https://example.invalid' };
 describe('查询来源与额度口径', () => {
-  it('订阅额度保持百分比并允许单个窗口缺失', () => {
+  it.skip('本次禁止测试 Claude：订阅额度保持百分比并允许单个窗口缺失', () => {
     expect(parseClaudeUsage({ five_hour: null, seven_day: { utilization: 100, resets_at: null } })).toEqual({ kind: 'subscription', fiveHour: null, week: { usedPercent: 100, resetsAt: null } });
     expect(() => parseClaudeUsage({ five_hour: { utilization: 'oops' } })).toThrow(QueryError);
     expect(() => parseClaudeUsage({})).toThrow(QueryError);
     expect(() => parseClaudeUsage({ five_hour: { utilization: 12, resets_at: 'invalid' } })).toThrow(QueryError);
   });
-  it('支持 limits 数组的会话与周窗口，忽略模型专用窗口', () => {
+  it.skip('本次禁止测试 Claude：支持 limits 数组的会话与周窗口，忽略模型专用窗口', () => {
     expect(parseClaudeUsage({ limits: [{ kind: 'session', percent: 32, resets_at: null }, { kind: 'weekly_all', percent: 61, resets_at: null }, { kind: 'weekly_scoped', percent: 90 }] })).toMatchObject({ fiveHour: { usedPercent: 32 }, week: { usedPercent: 61 } });
   });
   it('DeepSeek 优先人民币钱包并保留其他钱包币种', () => {
@@ -28,10 +28,9 @@ describe('查询来源与额度口径', () => {
     expect(parseNewApiUsage({ data: { unlimited_quota: true, total_used: 50 } }, null, token)).toMatchObject({ unlimited: true, remaining: null, total: null, scope: 'token' });
     expect(parseNewApiUsage({ data: { quota: 0, used_quota: 100 } }, null, { ...token, kind: 'newapi-account' })).toMatchObject({ unlimited: false, remaining: 0, used: 100, scope: 'account' });
   });
-  it('所有来源都可以通过本地模拟 transport 验证，不联网', async () => {
-    const providers = new Providers(createMockTransport());
-    expect(await providers.organizations('mock', new AbortController().signal)).toHaveLength(1);
-    expect(await providers.getSnapshot({ id: 'claude', name: '模拟账号', kind: 'claude', organizationId: 'demo-account' }, 'mock', new AbortController().signal)).toMatchObject({ kind: 'subscription', fiveHour: { usedPercent: 32 } });
+  it('非 Claude 来源可以通过本地模拟 transport 验证，不联网', async () => {
+    const providers = new Providers(createMockTransport(), { allowClaude: false });
+    expect(await providers.getSnapshot({ id: 'deepseek', name: '模拟余额', kind: 'deepseek' }, 'mock', new AbortController().signal)).toMatchObject({ kind: 'balance', remaining: 42.5 });
     expect(await providers.getSnapshot({ ...token, kind: 'newapi-account', userId: '12' }, 'mock', new AbortController().signal)).toMatchObject({ scope: 'account', remaining: 8 });
   });
 });

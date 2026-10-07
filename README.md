@@ -79,6 +79,6 @@ npm run package
 npm run test:package
 ```
 
-桌面验收只取得原版素材作比较，服务商请求全部模拟；不会启动 Claude Desktop、Claude Code 或其他 Claude 工具，不查询真实 Claude 账号。首次取得测试素材需要访问 GitHub，之后使用忽略提交的 `.asset-cache`；截图与结果在 `.test-artifacts`，均不进入公开包。
+桌面验收默认使用 DeepSeek 假余额，DeepSeek／New API 请求全部模拟或使用本机 HTTP 服务。演示／测试模式拒绝 Claude 查询与组织读取，页面禁止 HTTP(S) 外联；Claude 解析与订阅测试明确跳过。测试禁止启动或连接 Claude Desktop、Claude Code 或其他 Claude 工具，发现相关进程立即终止。首次取得测试素材需要访问 GitHub，之后使用忽略提交的 `.asset-cache`；截图与结果在 `.test-artifacts`，均不进入公开包。
 
 详细维护约定见 [开发说明](docs/development.md)，测试范围见 [验收记录](docs/validation.md)。**真实 Claude Desktop 的兼容性和账号查询未做真实环境验证。**

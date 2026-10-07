@@ -38,13 +38,14 @@ try {
   await application.evaluate(async () => { for (let i=0;i<50 && globalThis.__xiaokeTest.helperMode() !== 'mock';i++) await new Promise(resolve=>setTimeout(resolve,100)); });
   assert.equal(await application.evaluate(() => globalThis.__xiaokeTest.helperMode()), 'mock');
   await application.evaluate(()=>globalThis.__xiaokeTest.foreground(true));
-  await overlay.waitForFunction(() => window.__xiaokeDesktop.snapshot()?.data?.kind === 'subscription');
+  await overlay.waitForFunction(() => window.__xiaokeDesktop.snapshot()?.data?.kind === 'balance');
   assert.match(await settings.locator('#mode-note').innerText(), /模拟模式/);
   const snapshot = await overlay.evaluate(() => window.__xiaokeDesktop.snapshot());
-  assert.equal(snapshot.data.fiveHour.usedPercent, 32);
+  assert.equal(snapshot.provider, 'deepseek');
+  assert.equal(snapshot.data.remaining, 42.5);
   await overlay.evaluate(() => window.__xiaokeDesktop.showBubble());
   await overlay.waitForTimeout(500);
-  await overlay.screenshot({ path: path.join(artifacts, 'pet-subscription.png') });
+  await overlay.screenshot({ path: path.join(artifacts, 'pet-balance.png') });
   // 原版静态页面只运行固定 JavaScript，不启动 DSH；角色区域与适配版逐像素比较。
   const baselineId = await application.evaluate(async ({ BrowserWindow }) => {
     const pet = BrowserWindow.getAllWindows().find(window => window.getTitle() === '小克额度宠物');

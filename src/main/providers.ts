@@ -96,8 +96,9 @@ export function parseNewApiUsage(value: unknown, metadata: unknown, config: Sour
   };
 }
 export class Providers implements UsageProvider {
-  constructor(private readonly transport: JsonTransport) {}
+  constructor(private readonly transport: JsonTransport, private readonly options: { allowClaude?: boolean } = {}) {}
   async organizations(secret: string, signal: AbortSignal): Promise<Organization[]> {
+    if (this.options.allowClaude === false) throw new QueryError('configuration', '测试和演示模式不执行 Claude 查询。');
     const result = await this.transport('https://claude.ai/api/organizations', this.claudeHeaders(secret), signal);
     if (!Array.isArray(result)) throw new QueryError('format', '组织列表格式已变化。');
     return result.map(object).map(row => ({ id: String(row.uuid ?? row.id ?? ''), name: String(row.name ?? '个人账户') })).filter(row => /^[\w-]+$/.test(row.id));
@@ -109,6 +110,7 @@ export class Providers implements UsageProvider {
   async getSnapshot(config: SourceConfig, secret: string, signal: AbortSignal): Promise<UsageData> {
     if (!secret) throw new QueryError('configuration', '请先配置查询凭据。');
     if (config.kind === 'claude') {
+      if (this.options.allowClaude === false) throw new QueryError('configuration', '测试和演示模式不执行 Claude 查询。');
       if (!config.organizationId || !/^[\w-]+$/.test(config.organizationId)) throw new QueryError('configuration', '请先选择 Claude 组织。');
       return parseClaudeUsage(await this.transport(`https://claude.ai/api/organizations/${config.organizationId}/usage`, this.claudeHeaders(secret), signal));
     }

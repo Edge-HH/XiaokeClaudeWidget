@@ -15,7 +15,7 @@ for(const scale of packed ? [1] : [1,1.5,2]){
     assert.equal(info.mode,'mock'); assert.equal(info.query,'mock');
     await app.evaluate(()=>globalThis.__xiaokeTest.foreground(true));
     const page=app.windows().find(page=>page.url().endsWith('overlay.html'));
-    await page.waitForFunction(()=>window.__xiaokeDesktop?.snapshot()?.data?.kind==='subscription');
+    await page.waitForFunction(()=>window.__xiaokeDesktop?.snapshot()?.provider==='deepseek' && window.__xiaokeDesktop.snapshot()?.data?.kind==='balance');
     assert.equal(await page.evaluate(()=>window.devicePixelRatio),scale);
     await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().find(w=>w.getTitle().includes('模拟宿主')).setBounds({x:80,y:70,width:900,height:640}));
     await page.waitForTimeout(1200);

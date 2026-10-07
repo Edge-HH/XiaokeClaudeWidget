@@ -2,8 +2,8 @@ import { it, expect } from 'vitest';
 import { UsageScheduler } from '../src/main/scheduler.js';
 import { QueryError } from '../src/main/providers.js';
 import type { UsageData } from '../src/shared/types.js';
-const source = { id: 'claude', name: 'Claude', kind: 'claude' as const };
-const data: UsageData = { kind: 'subscription', fiveHour: { usedPercent: 32, resetsAt: null }, week: null };
+const source = { id: 'deepseek', name: 'DeepSeek', kind: 'deepseek' as const };
+const data: UsageData = { kind: 'balance', remaining: 32, used: null, total: null, unit: 'CNY', unlimited: false, scope: 'account' };
 it('隐藏时不查询，正常缓存每分钟刷新，错误保留旧数据', async () => {
   let now = 0, count = 0, fail = false;
   const scheduler = new UsageScheduler({ getSnapshot: async () => { count++; if (fail) throw new QueryError('network', '模拟网络失败'); return data; } }, source, () => 'mock', () => {}, () => now);
@@ -23,13 +23,13 @@ it('限流期间手动刷新也不绕过重试时间', async () => {
 });
 it('切换来源后旧请求不能覆盖新的额度', async () => {
   let resolveOld!: (data: UsageData) => void;
-  const scheduler = new UsageScheduler({ getSnapshot: config => config.id === 'claude' ? new Promise(resolve => { resolveOld = resolve; }) : Promise.resolve({ ...data, fiveHour: { usedPercent: 70, resetsAt: null } }) }, source, () => 'mock');
+  const scheduler = new UsageScheduler({ getSnapshot: config => config.id === 'deepseek' ? new Promise(resolve => { resolveOld = resolve; }) : Promise.resolve({ ...data, remaining: 70 }) }, source, () => 'mock');
   const old = scheduler.refresh(true);
   scheduler.select({ ...source, id: 'second' }); await scheduler.refresh(true);
   resolveOld(data); await old;
-  expect(scheduler.snapshot()).toMatchObject({ sourceId: 'second', data: { fiveHour: { usedPercent: 70 } } }); scheduler.dispose();
+  expect(scheduler.snapshot()).toMatchObject({ sourceId: 'second', data: { remaining: 70 } }); scheduler.dispose();
 });
-it('倒计时到期触发重新查询，不直接清零额度', async () => {
+it.skip('本次禁止测试订阅路径：倒计时到期触发重新查询，不直接清零额度', async () => {
   let now = 0, count = 0;
   const scheduler = new UsageScheduler({ getSnapshot: async () => { count++; return { kind: 'subscription', fiveHour: { usedPercent: 32, resetsAt: new Date(20_000).toISOString() }, week: null }; } }, source, () => 'mock', () => {}, () => now);
   await scheduler.refresh(true); scheduler.setVisible(true);

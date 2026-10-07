@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Menu, Tray, dialog, safeStorage, protocol, screen, nativeImage, shell, net } from 'electron';
+import { app, BrowserWindow, ipcMain, Menu, Tray, dialog, safeStorage, protocol, screen, nativeImage, shell, net, session } from 'electron';
 import { readFile, mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -279,17 +279,27 @@ async function installProtocol() {
   });
 }
 async function initialize() {
+  if (demo) {
+    // 演示/测试页面只能访问本地协议；即使原版脚本带外部 URL，也不能连接真实服务。
+    session.defaultSession.webRequest.onBeforeRequest({ urls: ['http://*/*', 'https://*/*'] }, (_details, callback) => callback({ cancel: true }));
+  }
   const directory = app.getPath('userData');
   await mkdir(directory, { recursive: true });
   store = new SettingsStore(directory, safeStorage); await store.initialize();
-  if (demo && !store.configured().includes('claude-default')) {
-    await store.save({ id: 'claude-default', kind: 'claude', name: 'Claude（模拟数据）', organizationId: 'demo-account' }, 'demo-session-only');
+  if (demo) {
+    const prefs = store.getPreferences();
+    const existing = prefs.sources.find(source => source.id === 'deepseek-demo');
+    if (!existing || !store.configured().includes('deepseek-demo')) {
+      await store.save(existing ?? { id: 'deepseek-demo', kind: 'deepseek', name: 'DeepSeek（模拟数据）' }, 'demo-api-key-only');
+    }
+    // 迁移早期演示默认值，同时保留用户已经选择的其他非 Claude 来源。
+    if (prefs.activeId === 'claude-default') await store.activate('deepseek-demo');
   }
   const manifest = JSON.parse(await readFile(path.join(base, 'vendor', 'asset-manifest.json'), 'utf8')) as AssetManifest;
   assets = new AssetManager(path.join(directory, 'original'), manifest);
   const fixture = argumentValue('--fixture-assets');
   if (testMode && fixture) await assets.import(path.resolve(fixture));
-  providers = new Providers(demo ? createMockTransport() : createHttpTransport((url, options) => net.fetch(url, options)));
+  providers = new Providers(demo ? createMockTransport() : createHttpTransport((url, options) => net.fetch(url, options)), { allowClaude: !demo });
   scheduler = new UsageScheduler(providers, activeSource(), id => store.secret(id), sendSnapshot);
   // 原版 DeepSeek 观测账本继续使用自己的精确金额逻辑。订阅百分比永远不会进入它。
   (globalThis as typeof globalThis & { __xiaokeHostBalance?: () => unknown }).__xiaokeHostBalance = () => {
@@ -311,7 +321,7 @@ async function initialize() {
       editing = false; petMenuOpen = false;
       overlay.setFocusable(false); overlay.setSkipTaskbar(true); applyMouseHit(false, true);
     }
-    scheduler.setVisible(false);
+    scheduler.setVisible(!!settings?.isFocused() && nativeOwnForeground);
   });
   overlay.webContents.on('did-finish-load', () => {
     overlayDocumentLoaded = true;

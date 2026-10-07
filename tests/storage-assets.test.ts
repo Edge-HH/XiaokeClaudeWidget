@@ -29,7 +29,7 @@ it('加密不可用时拒绝保存，损坏配置不被空配置覆盖', async (
   await writeFile(path.join(dir, 'preferences.json'), 'broken');
   await expect(new SettingsStore(dir, cipher).initialize()).rejects.toThrow('损坏');
   expect(await readFile(path.join(dir, 'preferences.json'), 'utf8')).toBe('broken');
-  expect(() => validateSource({ id: '../escape', name: '来源', kind: 'claude' })).toThrow();
+    expect(() => validateSource({ id: '../escape', name: '来源', kind: 'deepseek' })).toThrow();
 });
 it('离线导入原版素材先校验整组字节，缺失时仍能打开配置', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'xiaoke-assets-')); const input = path.join(dir, 'input'); await mkdir(input);
