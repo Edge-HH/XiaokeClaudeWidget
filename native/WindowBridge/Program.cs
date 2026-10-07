@@ -79,6 +79,12 @@ internal static class Program
             var root = json.RootElement; id = root.GetProperty("id").GetInt32();
             if (mockHandle == 0 || !Native.IsWindow(mockHandle)) throw new InvalidOperationException("非模拟模式");
             var action = root.GetProperty("action").GetString();
+            if (action == "exit")
+            {
+                // 只让本项目 mock 辅助进程自行退出，用于验证主进程故障恢复；不关闭任何宿主。
+                stopping = true;
+                Console.WriteLine(JsonSerializer.Serialize(new { Type = "test-input", Id = id, Ok = true }, Json)); Console.Out.Flush(); return;
+            }
             if (action == "style")
             {
                 var window = new nint(long.Parse(root.GetProperty("hwnd").GetString()!));
@@ -161,7 +167,8 @@ internal static class Program
         }
         else
         {
-            if (IsCandidate(foregroundRoot)) tracked = foregroundRoot;
+            var foregroundHost = HostWindowPolicy.ResolveForegroundHost(foregroundRoot, tracked, IsCandidate, hwnd => Native.GetWindow(hwnd, 4));
+            if (foregroundHost != 0) tracked = foregroundHost;
             else if (!IsCandidate(tracked))
             {
                 tracked = 0;
@@ -174,7 +181,7 @@ internal static class Program
             var point = new Native.Point(); Native.ClientToScreen(tracked, ref point);
             Native.GetWindowThreadProcessId(tracked, out var pid);
             var cloaked = 0; Native.DwmGetWindowAttribute(tracked, 14, out cloaked, sizeof(int));
-            host = new { Hwnd = tracked.ToInt64().ToString(), ProcessId = pid, X = point.X, Y = point.Y, Width = rect.Right - rect.Left, Height = rect.Bottom - rect.Top, Dpi = Native.GetDpiForWindow(tracked), Foreground = foregroundRoot == tracked, Minimized = Native.IsIconic(tracked), Visible = Native.IsWindowVisible(tracked) && cloaked == 0, Above = Native.GetWindow(tracked, 3).ToInt64().ToString() };
+            host = new { Hwnd = tracked.ToInt64().ToString(), ProcessId = pid, X = point.X, Y = point.Y, Width = rect.Right - rect.Left, Height = rect.Bottom - rect.Top, Dpi = Native.GetDpiForWindow(tracked), Foreground = HostWindowPolicy.IsHostForeground(foregroundRoot, tracked, hwnd => Native.GetWindow(hwnd, 4)), Minimized = Native.IsIconic(tracked), Visible = Native.IsWindowVisible(tracked) && cloaked == 0, Above = Native.GetWindow(tracked, 3).ToInt64().ToString() };
         }
         // 小克设置/编辑取得前台与宿主前台分别报告，主进程负责交互期间的显示策略。
         var output = JsonSerializer.Serialize(new { Type = "host", Host = host, OwnForeground = foregroundPid == overlayPid }, Json);

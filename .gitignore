@@ -3,7 +3,7 @@ dist/
 release/
 .test-artifacts/
 .asset-cache/
-native/**/bin/
-native/**/obj/
+**/bin/
+**/obj/
 *.log
 

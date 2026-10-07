@@ -47,6 +47,9 @@ let pointerFixture: Electron.Point | null = null;
 let overlayReady = false;
 let overlayDocumentLoaded = false;
 let rendererFailed = false;
+let rendererRecoveryTimer: ReturnType<typeof setTimeout> | null = null;
+let rendererRestartAttempts = 0;
+let rendererLoadedAt = 0;
 let appliedPlacementRevision = 0;
 let trayMenuOpen = false;
 let placementRevision = 0;
@@ -315,6 +318,7 @@ async function initialize() {
   overlay = new BrowserWindow({ title: '小克额度宠物', show: false, frame: false, transparent: true, thickFrame: false, resizable: false, skipTaskbar: true, focusable: false, hasShadow: false, width: 1000, height: 700, webPreferences: { ...windowOptions(), backgroundThrottling: false } });
   overlay.setMenu(null); applyMouseHit(false, true); secureWindow(overlay);
   overlay.webContents.on('did-start-loading', () => {
+    rendererLoadedAt = 0;
     overlayReady = false; overlayDocumentLoaded = false; rendererFailed = false; appliedPlacementRevision = 0;
     if (overlay && !overlay.isDestroyed()) {
       overlay.hide();
@@ -325,13 +329,24 @@ async function initialize() {
   });
   overlay.webContents.on('did-finish-load', () => {
     overlayDocumentLoaded = true;
+    rendererLoadedAt = Date.now();
     recoverOverlay();
   });
   overlay.webContents.on('preload-error', () => { rendererFailed = true; });
   overlay.webContents.on('render-process-gone', () => {
     overlayReady = false; overlayDocumentLoaded = false; rendererFailed = true;
     if (overlay && !overlay.isDestroyed()) overlay.hide();
-    scheduler.setVisible(false);
+    scheduler.setVisible(!!settings?.isFocused() && nativeOwnForeground);
+    if (quitting || !overlay || overlay.isDestroyed() || rendererRecoveryTimer) return;
+    // 单次渲染进程故障自动重载；连续启动失败最多恢复三次，避免无限重载。
+    if (rendererLoadedAt > 0 && Date.now() - rendererLoadedAt >= 10_000) rendererRestartAttempts = 0;
+    if (rendererRestartAttempts >= 3) return;
+    const retryDelay = [500, 1000, 3000][rendererRestartAttempts++];
+    rendererRecoveryTimer = setTimeout(() => {
+      rendererRecoveryTimer = null;
+      if (!quitting && overlay && !overlay.isDestroyed()) overlay.reload();
+    }, retryDelay);
+    rendererRecoveryTimer.unref();
   });
   overlay.on('show', () => sendPlacement(true));
   await overlay.loadURL('xiaoke://app/overlay.html');
@@ -339,6 +354,8 @@ async function initialize() {
   overlay.on('closed', () => {
     // 窗口销毁后停止周期回调并释放引用，避免退出或测试清理时反复访问失效对象。
     stopPointerTracking();
+    if (rendererRecoveryTimer) clearTimeout(rendererRecoveryTimer);
+    rendererRecoveryTimer = null;
     overlay = null; overlayReady = false; overlayDocumentLoaded = false;
   });
   // 图标由代码绘制，不把受限原版角色图片放入托盘或安装包。
@@ -395,7 +412,7 @@ async function initialize() {
         setTimeout(() => tray?.closeContextMenu(), 120);
         tray?.popUpContextMenu();
       },
-      input: (action: 'focus' | 'move' | 'click' | 'right-click', point: Electron.Point) => tracker!.testInput(action, screen.dipToScreenPoint(point)),
+      input: (action: 'focus' | 'move' | 'click' | 'right-click' | 'exit', point: Electron.Point) => tracker!.testInput(action, screen.dipToScreenPoint(point)),
       mouseStyle: () => tracker!.testInput('style', {x:0,y:0}, overlay!.getNativeWindowHandle().readBigUInt64LE().toString()),
     };
     // 仅测试入口暴露模拟宿主操作，生产包不接受控制其他程序的测试指令。
@@ -412,7 +429,7 @@ async function initialize() {
 }
 app.on('second-instance', openSettings);
 app.on('window-all-closed', () => { /* 宿主退出后保留托盘；退出必须由托盘命令触发。 */ });
-app.on('before-quit', () => { quitting = true; stopPointerTracking(); scheduler?.dispose(); tracker?.dispose(); upstream.dispose(); tray?.destroy(); });
+app.on('before-quit', () => { quitting = true; stopPointerTracking(); if (rendererRecoveryTimer) clearTimeout(rendererRecoveryTimer); scheduler?.dispose(); tracker?.dispose(); upstream.dispose(); tray?.destroy(); });
 if (primaryInstance) app.whenReady().then(initialize).catch((error: unknown) => {
   if (testMode) {
     const frames = error instanceof Error ? error.stack?.split('\n').filter(line => line.trim().startsWith('at ')).join('\n') : '';
