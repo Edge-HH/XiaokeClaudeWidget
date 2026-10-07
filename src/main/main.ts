@@ -136,6 +136,8 @@ function openSettings() {
 }
 function applyHost(host: HostGeometry | null, ownForeground = nativeOwnForeground) {
   if (quitting) return;
+  // 原生 stdout 可能仍排队着关闭前的几何；本进程已销毁的模拟宿主不能被旧消息复活。
+  if (demo && (!mock || mock.isDestroyed())) host = null;
   const previousForeground = lastHost?.foreground === true;
   const returnedToHost = nativeOwnForeground && !ownForeground && host?.foreground === true;
   lastHost = host;
@@ -404,6 +406,7 @@ async function initialize() {
   if (testMode) {
     (globalThis as typeof globalThis & { __xiaokeTest?: unknown }).__xiaokeTest = {
       host: () => lastHost, helperMode: () => tracker?.mode, queryMode: 'mock',
+      replayHost: (host: HostGeometry | null) => applyHost(host),
       foreground: (value: boolean | null) => { foregroundFixture=value; applyHost(lastHost); },
       pointer: (value: Electron.Point | null) => { pointerFixture=value; },
       pauseAttachment: (paused: boolean) => { attachmentPaused=paused; applyHost(lastHost); },

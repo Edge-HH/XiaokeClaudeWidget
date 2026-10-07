@@ -28,9 +28,11 @@ for(const scale of packed ? [1] : [1,1.5,2]){
     await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().find(w=>w.getTitle().includes('模拟宿主')).maximize()); await page.waitForTimeout(300);
     assert.equal(await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().find(w=>w.getTitle()==='小克额度宠物').isVisible()),true);
     await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().find(w=>w.getTitle().includes('模拟宿主')).minimize()); await page.waitForTimeout(300);
-    assert.equal(await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().find(w=>w.getTitle()==='小克额度宠物').isVisible()),false);
-    await app.evaluate(({BrowserWindow})=>{const host=BrowserWindow.getAllWindows().find(w=>w.getTitle().includes('模拟宿主'));host.restore();host.close();}); await page.waitForTimeout(300);
-    assert.equal(await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().find(w=>w.getTitle()==='小克额度宠物').isVisible()),false);
+    const minimized=await app.evaluate(({BrowserWindow})=>({visible:BrowserWindow.getAllWindows().find(w=>w.getTitle()==='小克额度宠物').isVisible(),hostMinimized:BrowserWindow.getAllWindows().find(w=>w.getTitle().includes('模拟宿主')).isMinimized(),native:globalThis.__xiaokeTest.host()}));
+    assert.equal(minimized.visible,false,'宿主最小化后应隐藏宠物：'+JSON.stringify(minimized));
+    await app.evaluate(({BrowserWindow}, previous)=>{const host=BrowserWindow.getAllWindows().find(w=>w.getTitle().includes('模拟宿主'));host.restore();host.close();globalThis.__xiaokeTest.replayHost(previous);}, { ...geometry, ...await app.evaluate(()=>globalThis.__xiaokeTest.host()), minimized:false,visible:true }); await page.waitForTimeout(300);
+    const closed=await app.evaluate(({BrowserWindow})=>({visible:BrowserWindow.getAllWindows().find(w=>w.getTitle()==='小克额度宠物').isVisible(),windows:BrowserWindow.getAllWindows().map(w=>({title:w.getTitle(),visible:w.isVisible(),minimized:w.isMinimized()})),native:globalThis.__xiaokeTest.host()}));
+    assert.equal(closed.visible,false,'关闭模拟宿主后应隐藏宠物：'+JSON.stringify(closed));
     results.push({scale,packed,geometry,foregroundFixtures:true,closedHostHidden:true});
     console.log((packed?'打包成品':'模拟缩放')+' '+scale*100+'% 验收通过');
   }finally{clearTimeout(watchdog);await app.evaluate(({app})=>app.quit()).catch(()=>{});await app.close().catch(()=>{});}
