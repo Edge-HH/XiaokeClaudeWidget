@@ -1,4 +1,5 @@
-import { readFile, writeFile, rename, mkdir } from 'node:fs/promises';
+import { readFile, writeFile, rename, mkdir, unlink } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import type { Preferences, SourceConfig } from '../shared/types.js';
 
@@ -7,9 +8,12 @@ export const defaultPreferences = (): Preferences => ({ version: 1, activeId: 'c
 
 export async function atomicJson(file: string, value: unknown): Promise<void> {
   await mkdir(path.dirname(file), { recursive: true });
-  const temporary = file + '.tmp';
-  await writeFile(temporary, JSON.stringify(value, null, 2), { encoding: 'utf8', mode: 0o600 });
-  await rename(temporary, file);
+  // 不同写入使用独立临时文件；失败时也不遗留明文或加密凭据碎片。
+  const temporary = file + '.' + randomUUID() + '.tmp';
+  try {
+    await writeFile(temporary, JSON.stringify(value, null, 2), { encoding: 'utf8', mode: 0o600 });
+    await rename(temporary, file);
+  } finally { await unlink(temporary).catch(() => {}); }
 }
 export function validateSource(input: SourceConfig): SourceConfig {
   const kinds = ['claude', 'deepseek', 'newapi-token', 'newapi-account'];
@@ -34,6 +38,7 @@ export class SettingsStore {
   private secrets: Record<string, string> = {};
   private readonly secretFile: string;
   private readonly configFile: string;
+  private pendingMutation: Promise<void> = Promise.resolve();
   constructor(private readonly directory: string, private readonly cipher: Cipher) {
     this.secretFile = path.join(directory, 'credentials.json');
     this.configFile = path.join(directory, 'preferences.json');
@@ -44,10 +49,18 @@ export class SettingsStore {
       const raw = JSON.parse(await readFile(this.configFile, 'utf8'));
       if (raw.version !== 1 || !Array.isArray(raw.sources) || !raw.sources.length) throw new Error('配置版本无效。');
       const sources: SourceConfig[] = raw.sources.map(validateSource);
+      if (new Set(sources.map(source => source.id)).size !== sources.length) throw new Error('查询来源 ID 重复。');
       if (!sources.some(source => source.id === raw.activeId)) throw new Error('当前查询来源不存在。');
       this.preferences = { version: 1, activeId: raw.activeId, sources };
     } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw new Error('配置文件损坏，已暂停保存，请检查 preferences.json。'); }
-    try { this.secrets = JSON.parse(await readFile(this.secretFile, 'utf8')); } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw new Error('凭据文件损坏，已暂停保存。'); }
+    try {
+      const secrets: unknown = JSON.parse(await readFile(this.secretFile, 'utf8'));
+      if (!secrets || typeof secrets !== 'object' || Array.isArray(secrets) ||
+          Object.entries(secrets).some(([id, value]) => !/^[\w-]{1,80}$/.test(id) || typeof value !== 'string' || !value || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(value))) {
+        throw new Error('凭据结构无效。');
+      }
+      this.secrets = secrets as Record<string, string>;
+    } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw new Error('凭据文件损坏，已暂停保存。'); }
   }
   getPreferences(): Preferences { return structuredClone(this.preferences); }
   configured(): string[] { return Object.keys(this.secrets); }
@@ -55,8 +68,17 @@ export class SettingsStore {
     if (!this.secrets[id]) return '';
     try { return this.cipher.decryptString(Buffer.from(this.secrets[id], 'base64')); } catch { throw new Error('无法解密凭据，请在当前 Windows 账户中重新配置。'); }
   }
-  async save(source: SourceConfig, secret?: string): Promise<void> {
+  // IPC 可能同时来自宠物和设置；串行执行整次修改，避免旧内存快照覆盖较新的来源。
+  private mutate(operation: () => Promise<void>): Promise<void> {
+    const work = this.pendingMutation.then(operation);
+    this.pendingMutation = work.catch(() => {});
+    return work;
+  }
+  save(source: SourceConfig, secret?: string): Promise<void> {
     const config = validateSource(source);
+    return this.mutate(() => this.saveNow(config, secret));
+  }
+  private async saveNow(config: SourceConfig, secret?: string): Promise<void> {
     if (secret !== undefined && secret !== '') {
       if (secret.length > 8192 || /[\r\n]/.test(secret)) throw new Error('凭据格式无效。');
       if (!this.cipher.isEncryptionAvailable()) throw new Error('Windows 凭据加密不可用，未保存密钥。');
@@ -70,13 +92,15 @@ export class SettingsStore {
     await atomicJson(this.configFile, next);
     this.preferences = next;
   }
-  async activate(id: string) {
+  activate(id: string): Promise<void> { return this.mutate(() => this.activateNow(id)); }
+  private async activateNow(id: string) {
     if (!this.preferences.sources.some(source => source.id === id)) throw new Error('查询来源不存在。');
     const next = { ...this.preferences, activeId: id };
     await atomicJson(this.configFile, next);
     this.preferences = next;
   }
-  async remove(id: string) {
+  remove(id: string): Promise<void> { return this.mutate(() => this.removeNow(id)); }
+  private async removeNow(id: string) {
     const next = this.getPreferences();
     next.sources = next.sources.filter(source => source.id !== id);
     if (!next.sources.length) next.sources = defaultPreferences().sources;

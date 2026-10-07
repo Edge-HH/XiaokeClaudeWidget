@@ -20,6 +20,8 @@ Claude 订阅数据保留五小时／周百分比与服务端重置时间；窗�
 
 演示和测试默认使用 DeepSeek 模拟余额。Providers 在演示／测试模式拒绝 Claude 来源与组织查询，Electron 页面也禁止 HTTP(S) 外联。测试配置、素材与截图使用独立目录，不读取真实账号凭据。
 
+来源保存、启用与删除在 SettingsStore 内串行执行，避免来自不同窗口的 IPC 相互覆盖。JSON 写入使用独立临时文件和原子替换；损坏凭据结构或重复来源 ID 会在启动时明确拒绝，保留原文件供用户备份与修复。
+
 数据和存储测试使用本地服务与模拟响应；UI 验收启动本项目 Electron 与模拟宿主。真实 Claude Desktop 和真实账户查询未验证，不能在报告中写成“已实测兼容”。
 
 `npm run test:lifecycle` 验证宠物及全部窗口销毁后的周期回调和延迟回调。该测试捕获主进程异常，避免错误对话框阻塞自动验收；`node tests/window-lifecycle.mjs --package` 对打包成品执行同一检查。访问 Electron 窗口状态前先检查 `isDestroyed()`，窗口 `closed` 与应用 `before-quit` 都要清理所属定时器。
