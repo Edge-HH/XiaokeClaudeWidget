@@ -218,11 +218,11 @@ function installIpc() {
   handle('desktop:state', state);
   // 只返回本项目的显示状态；不读取凭据、不刷新额度、不返回宿主标题或聊天内容。
   handle('desktop:attachment', attachmentState);
-  handle('desktop:save', async (input: SourceConfig, secret: string) => { await store.save(input, secret); await store.activate(input.id); selectSaved(true); return state(); });
+  handle('desktop:save', async (input: SourceConfig, secret: string) => { await store.saveAndActivate(input, secret); selectSaved(true); return state(); });
   handle('desktop:remove', async (id: string) => { await store.remove(id); selectSaved(true); return state(); });
   handle('desktop:activate', async (id: string) => { await store.activate(id); selectSaved(); return state(); });
-  handle('desktop:organizations', (id: string, secret: string) => providers.organizations(secret || store.secret(id), AbortSignal.timeout(10_000)));
-  handle('desktop:test-source', (input: SourceConfig, secret: string) => providers.getSnapshot(validateSource(input), secret || store.secret(input.id), AbortSignal.timeout(10_000)));
+  handle('desktop:organizations', (id: string, secret: string) => providers.organizations(secret || store.secret(id, { id, kind: 'claude', name: 'Claude' }), AbortSignal.timeout(10_000)));
+  handle('desktop:test-source', (input: SourceConfig, secret: string) => { const config = validateSource(input); return providers.getSnapshot(config, secret || store.secret(config.id, config), AbortSignal.timeout(10_000)); });
   handle('desktop:refresh', () => scheduler.refresh(true));
   handle('desktop:download-assets', async () => {
     if (testMode) throw new Error('测试模式不执行素材联网下载，请使用测试素材缓存。');

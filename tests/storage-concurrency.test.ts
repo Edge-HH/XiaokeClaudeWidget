@@ -1,8 +1,8 @@
 import { it, expect } from 'vitest';
-import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile, mkdir, rename } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { SettingsStore, type Cipher } from '../src/main/storage.js';
+import { SettingsStore, validateSource, type Cipher } from '../src/main/storage.js';
 
 // 仅使用假凭据验证文件操作，不接触系统凭据或任何服务。
 const cipher: Cipher = {
@@ -44,4 +44,77 @@ it('同名 ID 的重复来源配置必须明确报错，避免查询来源串号
     ],
   }));
   await expect(new SettingsStore(directory, cipher).initialize()).rejects.toThrow('配置文件损坏');
+});
+
+it('同一来源更换查询类型或站点须重新填写凭据，拒绝发送上个来源的密钥', async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), 'xiaoke-credential-scope-'));
+  const store = new SettingsStore(directory, cipher); await store.initialize();
+  const original = { id: 'changing', kind: 'deepseek' as const, name: '余额' };
+  await store.save(original, 'old-key');
+  const replacement = { ...original, kind: 'newapi-token' as const, baseUrl: 'https://example.invalid' };
+  await expect(store.save(replacement, '')).rejects.toThrow('重新填写');
+  expect(store.secret(original.id)).toBe('old-key');
+  expect(store.getPreferences().sources.find(source => source.id === original.id)?.kind).toBe('deepseek');
+  expect(() => store.secret(original.id, replacement)).toThrow('重新填写');
+  await store.save(replacement, 'new-key');
+  expect(store.secret(original.id, replacement)).toBe('new-key');
+  await expect(store.save({ ...replacement, baseUrl: 'https://other.invalid' }, '')).rejects.toThrow('重新填写');
+  await expect(store.save({ ...replacement, baseUrl: 'https://example.invalid/Gateway' }, '')).rejects.toThrow('重新填写');
+});
+it('同站点规范化地址可以保留凭据，没有凭据的配置可直接更换类型', async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), 'xiaoke-credential-equivalent-'));
+  const store = new SettingsStore(directory, cipher); await store.initialize();
+  const original = { id: 'same-site', kind: 'newapi-token' as const, name: '令牌', baseUrl: 'https://EXAMPLE.invalid:443/gateway/' };
+  await store.save(original, 'same-key');
+  const equivalent = { ...original, baseUrl: 'https://example.invalid/gateway///' };
+  await store.save(equivalent, '');
+  expect(store.secret(original.id, original)).toBe('same-key');
+  await store.save({ id: 'empty', kind: 'deepseek', name: '未配置' });
+  await store.save({ id: 'empty', kind: 'newapi-account', name: '未配置', baseUrl: 'https://example.invalid' }, '');
+  expect(store.secret('empty')).toBe('');
+});
+it('保存并使用是一次完整修改，并发操作观察到各自对应的来源与凭据', async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), 'xiaoke-save-activate-'));
+  const store = new SettingsStore(directory, cipher); await store.initialize();
+  const first = { id: 'first', kind: 'deepseek' as const, name: '一' };
+  const second = { id: 'second', kind: 'deepseek' as const, name: '二' };
+  const observations = await Promise.all([first, second].map(async source => {
+    await store.saveAndActivate(source, source.id + '-key');
+    return { activeId: store.getPreferences().activeId, secret: store.secret(source.id) };
+  }));
+  expect(observations).toEqual([{ activeId: 'first', secret: 'first-key' }, { activeId: 'second', secret: 'second-key' }]);
+  const reopened = new SettingsStore(directory, cipher); await reopened.initialize();
+  expect(reopened.getPreferences().activeId).toBe('second');
+});
+it('不存在或继承属性名称的来源不算已配置，也不读取任何凭据', async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), 'xiaoke-credential-own-'));
+  await writeFile(path.join(directory, 'credentials.json'), JSON.stringify({ orphan: Buffer.from('orphan-key').toString('base64') }));
+  const store = new SettingsStore(directory, cipher); await store.initialize();
+  expect(store.configured()).toEqual([]);
+  for (const id of ['constructor', 'toString', '__proto__', 'orphan']) expect(store.secret(id)).toBe('');
+  await store.save({ id: 'constructor', kind: 'deepseek', name: '自有属性' }, 'own-key');
+  expect(store.secret('constructor')).toBe('own-key');
+  expect(store.configured()).toEqual(['constructor']);
+});
+it('来源 ID 和凭据必须真的是字符串，不能靠运行时强制转换混入配置', async () => {
+  expect(() => Reflect.apply(validateSource, undefined, [{ id: 123, kind: 'deepseek', name: '错误来源' }])).toThrow('来源');
+  const directory = await mkdtemp(path.join(tmpdir(), 'xiaoke-credential-type-'));
+  const store = new SettingsStore(directory, cipher); await store.initialize();
+  await expect(Reflect.apply(store.save, store, [{ id: 'bad-key', kind: 'deepseek', name: '错误凭据' }, 123])).rejects.toThrow('凭据格式');
+});
+it('来源配置写入失败时回滚加密文件和内存密钥，原配置不被覆盖', async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), 'xiaoke-storage-rollback-'));
+  const store = new SettingsStore(directory, cipher); await store.initialize();
+  const original = { id: 'source', kind: 'deepseek' as const, name: '原来源' };
+  await store.saveAndActivate(original, 'old-key');
+  const originalCredentials = await readFile(path.join(directory, 'credentials.json'), 'utf8');
+  const originalPreferences = await readFile(path.join(directory, 'preferences.json'), 'utf8');
+  // 只在一次性临时目录制造文件写入故障，先保留原配置，不删除目录或用户文件。
+  await rename(path.join(directory, 'preferences.json'), path.join(directory, 'preferences-backup.json'));
+  await mkdir(path.join(directory, 'preferences.json'));
+  await expect(store.saveAndActivate({ ...original, kind: 'newapi-token', baseUrl: 'https://example.invalid' }, 'new-key')).rejects.toThrow();
+  expect(store.secret(original.id)).toBe('old-key');
+  expect(store.getPreferences().sources.find(source => source.id === original.id)).toEqual(original);
+  expect(await readFile(path.join(directory, 'credentials.json'), 'utf8')).toBe(originalCredentials);
+  expect(await readFile(path.join(directory, 'preferences-backup.json'), 'utf8')).toBe(originalPreferences);
 });
