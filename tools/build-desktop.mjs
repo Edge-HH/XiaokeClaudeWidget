@@ -36,12 +36,12 @@ let widget = await readFile(`${upstream}/lib/xiaoke-widget.js`, 'utf8');
 widget = replaceOnce(widget, 'try { dshxkInit() } catch (err) {}', "try { dshxkInit() } catch (err) { window.dispatchEvent(new Event('xiaoke:init-failed')) }");
 widget = replaceOnce(widget, 'function dshxkIsChatRoot(r) {', 'function dshxkIsChatRoot(r) {\n  if (window.desktopBridge) return true');
 widget = replaceFunction(widget, 'refresh', `return fetch('/desktop/snapshot' + (manual ? '?refresh=1' : ''), { cache: 'no-store' }).then(function(r){return r.json()}).then(applyDesktopSnapshot).catch(function(){})`);
-widget = replaceOnce(widget, 'function render() {', 'function render() {\n  if (desktopSnapshot && !desktopIsDeepSeek()) { amountEl.textContent = desktopAmount(); setHint(desktopHint()); return }');
-widget = replaceOnce(widget, 'function bubbleAmountText() {', 'function bubbleAmountText() {\n  if (desktopSnapshot && !desktopIsDeepSeek()) return desktopAmount()');
-widget = replaceOnce(widget, 'function bubbleTodayText() {', 'function bubbleTodayText() {\n  if (desktopSnapshot && !desktopIsDeepSeek()) return desktopHint()');
+widget = replaceOnce(widget, 'function render() {', 'function render() {\n  if (desktopSnapshot) { if (!costBubbleActive && !bubbleRandomActive) { labelEl.textContent = desktopSnapshot.sourceName + " 额度"; amountEl.textContent = desktopAmount(); setHint(desktopHint()) } return }');
+widget = replaceOnce(widget, 'function bubbleAmountText() {', 'function bubbleAmountText() {\n  if (desktopSnapshot) return desktopAmount()');
+widget = replaceOnce(widget, 'function bubbleTodayText() {', 'function bubbleTodayText() {\n  if (desktopSnapshot) return desktopHint()');
 widget = replaceOnce(widget, 'function bubbleRowContentOf(mod) {', 'function bubbleRowContentOf(mod) {\n  var desktopRow = desktopBubbleRow(mod); if (desktopRow !== null) return { txt: desktopRow, line: null }');
 widget = replaceOnce(widget, 'function bubbleRowsTo(parentEl, mods) {', 'function bubbleRowsTo(parentEl, mods) {\n  mods = desktopDisplayModules(mods)');
-widget = replaceOnce(widget, 'function registerIfCountdown(blk) {', 'function registerIfCountdown(blk) {\n    if (blk.mod && blk.mod._desktopReset) { desktopResetRowRegister(blk.tx, blk.mod._desktopReset); return }');
+widget = replaceOnce(widget, 'function registerIfCountdown(blk) {', 'function registerIfCountdown(blk) {\n    desktopDataRowRegister(blk.tx, blk.mod)\n    if (blk.mod && blk.mod._desktopReset) { desktopResetRowRegister(blk.tx, blk.mod._desktopReset); return }');
 widget = replaceOnce(widget, 'function rightGap() {', 'function rightGap() {\n  if (window.desktopBridge) return 0');
 // viewport 保持原版的浏览器 CSS 坐标，客户区消息只触发重新测量。
 widget = replaceOnce(widget, 'function onDocContextMenu(e) {\n  try {\n    if (!menuBtnHide) return', 'function onDocContextMenu(e) {\n  try {\n    if (!menuBtnHide && !window.desktopBridge) return');

@@ -2,6 +2,7 @@
 var desktopSnapshot = null;
 var desktopResetRows = [];
 var desktopResetTimer = null;
+var desktopDataRows = [];
 var desktopClientViewport = null;
 var desktopOverlayVisible = false;
 var desktopPlacementRevision = 0;
@@ -110,6 +111,20 @@ function desktopResetRowRegister(element, windowName) {
     desktopResetRows.forEach(function(row){ row.element.textContent = (row.windowName==='fiveHour'?'五小时 ':'周额度 ') + desktopReset(desktopSnapshot.data[row.windowName]); });
   },1000);
 }
+function desktopDataRowRegister(element, mod) {
+  var original = mod && (mod._desktopMod || mod);
+  if (!element || desktopBubbleRow(original) === null) return;
+  desktopDataRows = desktopDataRows.filter(function(row){return row.element.isConnected && row.element !== element;});
+  desktopDataRows.push({ element:element, mod:original });
+}
+function desktopUpdateDataRows() {
+  // 默认泡泡使用模块节点，旧 amountEl/hintEl 已隐藏。只更新额度文字，保留台词、样式与停留时间。
+  desktopDataRows = desktopDataRows.filter(function(row){return row.element.isConnected;});
+  desktopDataRows.forEach(function(row){
+    var text = desktopBubbleRow(row.mod);
+    if (text !== null) row.element.textContent = text;
+  });
+}
 function desktopIsDeepSeek() { return desktopSnapshot && desktopSnapshot.provider === 'deepseek'; }
 function desktopReset(row) {
   if (!row || !row.resetsAt) return '';
@@ -124,21 +139,35 @@ function desktopAmount() {
   if (!d) return '—';
   if (d.kind === 'subscription') return desktopWindow(d.fiveHour, '五小时');
   if (d.unlimited) return '无限额度（令牌）';
+  if (desktopIsDeepSeek()) return d.remaining === null ? '—' : fmt(d.remaining, d.unit);
   return d.remaining === null ? '—' : d.remaining.toLocaleString('zh-CN', { maximumFractionDigits: d.unit === '额度' ? 0 : 6 }) + ' ' + d.unit;
+}
+function desktopStatusText(text) {
+  var s = desktopSnapshot;
+  if (!s) return text;
+  if (s.status === 'stale') return '旧数据 · ' + text + (s.message ? ' · ' + s.message : ' · 查询失败');
+  if (s.status === 'loading') return '正在查询 · ' + text;
+  return text;
 }
 function desktopHint() {
   var s = desktopSnapshot;
   if (!s) return '等待查询';
   if (!s.data) return s.message || '正在查询…';
-  var prefix = s.status === 'stale' ? '旧数据 · ' : '';
-  if (s.data.kind === 'subscription') return prefix + desktopWindow(s.data.week, '本周');
-  return prefix + (s.data.used === null ? '当前账户余额' : '累计已用 ' + s.data.used.toLocaleString('zh-CN', { maximumFractionDigits: 6 }) + ' ' + s.data.unit);
+  if (s.data.kind === 'subscription') return desktopStatusText(desktopWindow(s.data.week, '本周'));
+  if (desktopIsDeepSeek()) return desktopStatusText((state.usageLabel || '今日已用') + ' ' + (state.todayUsage === null || state.todayUsage === undefined ? '—' : fmt(state.todayUsage, state.todayUsageCurrency || s.data.unit)));
+  return desktopStatusText(s.data.used === null ? '当前账户余额' : '累计已用 ' + s.data.used.toLocaleString('zh-CN', { maximumFractionDigits: 6 }) + ' ' + s.data.unit);
 }
 function desktopBubbleRow(mod) {
-  if (!desktopSnapshot || desktopIsDeepSeek() || !mod || mod.modelId) return null;
-  if (mod.type === 'balance') return desktopAmount();
-  if (mod.type === 'today') return desktopHint();
-  if (mod.type === 'peak' || mod.type === 'nextpeak') return desktopSnapshot.status === 'stale' ? '数据未刷新' : desktopSnapshot.data && desktopSnapshot.data.kind === 'subscription' ? '账号共享额度' : '账户 / 令牌额度';
+  if (!desktopSnapshot || !mod || (mod.modelId && mod.modelId !== 'deepseek')) return null;
+  if (mod.type === 'balance') return desktopIsDeepSeek() ? bubbleContentText(mod, desktopAmount()) : desktopAmount();
+  if (mod.type === 'today') {
+    if (desktopIsDeepSeek() && desktopSnapshot.data) return desktopStatusText(bubbleContentText(mod, (state.usageLabel || '今日已用') + ' ' + (state.todayUsage === null || state.todayUsage === undefined ? '—' : fmt(state.todayUsage, state.todayUsageCurrency || desktopSnapshot.data.unit))));
+    return desktopHint();
+  }
+  if (!desktopIsDeepSeek() && (mod.type === 'peak' || mod.type === 'nextpeak')) {
+    var data = desktopSnapshot.data;
+    return data && data.kind === 'subscription' ? (mod.peakStyle === 'count' ? '周额度 ' + desktopReset(data.week) : '五小时 ' + desktopReset(data.fiveHour)) : (desktopSnapshot.status === 'stale' ? '旧数据' : data && data.scope === 'token' ? '令牌额度' : '账户余额');
+  }
   if (mod.type === 'session') return '当前对话不可用';
   if (mod.type === 'text' && /^(DeepSeek|小克).*余额$/.test(mod.text || '')) return desktopSnapshot.sourceName + (desktopSnapshot.data && desktopSnapshot.data.kind === 'subscription' ? ' 用量' : ' 额度');
   return null;
@@ -160,26 +189,41 @@ function desktopDisplayModules(mods) {
     else if (mod.type === 'session') text = '当前对话不可用';
     else if (mod.type === 'text' && /^(DeepSeek|小克).*余额$/.test(mod.text || '')) text = desktopSnapshot.sourceName.replace(/（模拟数据）$/, '') + ' 额度';
     if (text === null) return mod;
-    // 短标签使用原版的字号档位；去掉金额专用模板，防止百分比被标成“余额”。
-    return Object.assign({}, mod, { type:'text', text:text, tpl:'', size:size, row:row, rgb:'', bgRgb:'', bg:'', peakStyle:'', _desktopReset:data && data.kind === 'subscription' && (mod.type==='peak'||mod.type==='nextpeak') ? (mod.peakStyle==='count'?'week':'fiveHour') : null });
+    // 只替换金额模板；文字颜色与配套底色必须成对保留，否则原版白字额度卡会变成白底白字。
+    var adapted = Object.assign({}, mod, { type:'text', text:text, tpl:'', size:size, row:row, peakStyle:'', _desktopMod:mod, _desktopReset:data && data.kind === 'subscription' && (mod.type==='peak'||mod.type==='nextpeak') ? (mod.peakStyle==='count'?'week':'fiveHour') : null });
+    if (mod.type === 'peak' || mod.type === 'nextpeak') {
+      adapted.color = mod.color || mod.offColor || mod.peakColor || '';
+      adapted.bg = mod.bg || mod.offBg || '';
+      adapted.bgRgb = mod.bgRgb || mod.offBgRgb || '';
+      adapted.rgb = mod.rgb || mod.offRgb || '';
+    }
+    return adapted;
   });
 }
 function applyDesktopSnapshot(snapshot) {
+  var sourceChanged = desktopSnapshot && desktopSnapshot.sourceId !== snapshot.sourceId;
   var changed = desktopSnapshot && JSON.stringify(desktopSnapshot.data) !== JSON.stringify(snapshot.data);
+  if (sourceChanged) { hideBubble(); desktopDataRows = []; }
   desktopSnapshot = snapshot;
   // 订阅用量不进入 state.balance、animateAmount 或原版金额提醒逻辑。
   state.balance = snapshot.data && snapshot.data.kind === 'balance' ? snapshot.data.remaining : null;
   state.currency = snapshot.data && snapshot.data.kind === 'balance' ? snapshot.data.unit : null;
-  state.todayUsage = null; shown = state.balance;
+  // 加载/失败保留同一 DeepSeek 来源的本地观测日统计；换来源时清空，避免串账户。
+  if (sourceChanged || !desktopIsDeepSeek()) {
+    state.todayUsage = null; state.todayUsageCurrency = null; state.usageLabel = null;
+    state.isPeak = null; state.peakNextChangeAt = null; state.peakHolidays = null;
+  }
+  shown = state.balance;
   state.status = snapshot.status === 'error' ? 'error' : 'ok';
   state.message = snapshot.message || '';
   render();
+  desktopUpdateDataRows();
   if (desktopIsDeepSeek() && snapshot.status === 'ready') {
     fetch('/dsh-xiaoke/balance.json?refresh=1').then(function(r){return r.json()}).then(function(balance){
       if (!balance.ok || desktopSnapshot !== snapshot) return;
       state.todayUsage = balance.todayUsage; state.todayUsageCurrency = balance.todayUsageCurrency; state.usageLabel = balance.usageLabel;
       state.isPeak = balance.isPeak; state.peakNextChangeAt = balance.peakNextChangeAt; state.peakHolidays = balance.peakHolidays;
-      checkUsageAlerts(state.balance, state.todayUsage); render();
+      checkUsageAlerts(state.balance, state.todayUsage); render(); desktopUpdateDataRows();
     }).catch(function(){});
   }
   if (changed && snapshot.status === 'ready' && desktopOverlayVisible && document.visibilityState === 'visible') showBubble();
